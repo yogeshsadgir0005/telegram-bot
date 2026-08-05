@@ -76,6 +76,34 @@ async function getQuoteFromFinnhub(symbol: string): Promise<Quote | null> {
   };
 }
 
+// Second key-based fallback before dropping to scraped sources — lower rate
+// limit than Finnhub (8/min vs 60/min free tier) so kept as fallback, not
+// primary, but it's reliable when it does run.
+async function getQuoteFromTwelveData(symbol: string): Promise<Quote | null> {
+  const res = await axios.get("https://api.twelvedata.com/quote", {
+    params: { symbol: toTwelveDataSymbol(symbol), apikey: env.twelveDataApiKey },
+    timeout: 8000,
+  });
+  const d = res.data;
+  if (!d || d.status === "error" || typeof d.close !== "string") return null;
+  const price = Number(d.close);
+  const previousClose = Number(d.previous_close);
+  if (!Number.isFinite(price)) return null;
+  return {
+    symbol: symbol.toUpperCase(),
+    shortName: d.name,
+    price,
+    currency: d.currency,
+    change: Number(d.change),
+    changePercent: Number(d.percent_change),
+    previousClose,
+    dayHigh: Number(d.high),
+    dayLow: Number(d.low),
+    fiftyTwoWeekHigh: d.fifty_two_week?.high ? Number(d.fifty_two_week.high) : undefined,
+    fiftyTwoWeekLow: d.fifty_two_week?.low ? Number(d.fifty_two_week.low) : undefined,
+  };
+}
+
 async function getQuoteFromYahoo(symbol: string): Promise<Quote | null> {
   const q = await yahooFinance.quote(symbol);
   if (!q || typeof q.regularMarketPrice !== "number") return null;
@@ -131,6 +159,19 @@ async function getQuoteFromStooq(symbol: string): Promise<Quote | null> {
 
 export async function getQuote(rawSymbol: string): Promise<Quote | null> {
   const symbol = resolveSymbol(rawSymbol);
+
+  // Twelve Data first per product decision (also covers fundamentals like
+  // Yahoo does, unlike Finnhub's bare quote) — note its free tier is more
+  // rate-limited (8 req/min) than Finnhub's (60 req/min), so a burst of
+  // quote lookups will fall through to Finnhub more often under load.
+  if (env.twelveDataApiKey) {
+    try {
+      const q = await getQuoteFromTwelveData(symbol);
+      if (q) return q;
+    } catch (err) {
+      logger.warn("getQuoteFromTwelveData failed, falling back to Finnhub", { symbol, err: String(err) });
+    }
+  }
 
   if (env.finnhubApiKey) {
     try {
@@ -260,21 +301,25 @@ async function getPriceHistoryFromStooq(symbol: string, days: number): Promise<P
 export async function getPriceHistory(rawSymbol: string, days = 90): Promise<PricePoint[] | null> {
   const symbol = resolveSymbol(rawSymbol);
 
-  if (env.finnhubApiKey) {
-    try {
-      const points = await getPriceHistoryFromFinnhub(symbol, days);
-      if (points) return points;
-    } catch (err) {
-      logger.warn("getPriceHistoryFromFinnhub failed, falling back to Twelve Data", { symbol, err: String(err) });
-    }
-  }
-
+  // Twelve Data first per product decision — also the only one of the two
+  // that actually works for historical data on its free tier (Finnhub 403s
+  // on candles regardless of symbol, confirmed empirically), so this order
+  // also skips a guaranteed-fail step in the common case.
   if (env.twelveDataApiKey) {
     try {
       const points = await getPriceHistoryFromTwelveData(symbol, days);
       if (points) return points;
     } catch (err) {
-      logger.warn("getPriceHistoryFromTwelveData failed, falling back to Yahoo", { symbol, err: String(err) });
+      logger.warn("getPriceHistoryFromTwelveData failed, falling back to Finnhub", { symbol, err: String(err) });
+    }
+  }
+
+  if (env.finnhubApiKey) {
+    try {
+      const points = await getPriceHistoryFromFinnhub(symbol, days);
+      if (points) return points;
+    } catch (err) {
+      logger.warn("getPriceHistoryFromFinnhub failed, falling back to Yahoo", { symbol, err: String(err) });
     }
   }
 
