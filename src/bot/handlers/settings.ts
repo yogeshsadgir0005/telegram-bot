@@ -1,25 +1,21 @@
 import { Context } from "telegraf";
 import { IUser } from "../../db/models/User";
-import { settingsKeyboard } from "../keyboards";
 
-type ToggleKey = "morningBriefing" | "eveningSummary" | "breakingUpdates" | "weeklyDigest";
-
+// Plain-text summary, not a button grid — changes happen by just telling
+// the assistant what to change (handled by update_notification_preference
+// via normal chat), matching the "conversation, not options" design goal.
 export async function showSettings(ctx: Context, user: IUser): Promise<void> {
-  await ctx.reply(
-    "Your preferences — tap to toggle:",
-    settingsKeyboard(user as unknown as Parameters<typeof settingsKeyboard>[0])
-  );
-}
-
-export async function handleSettingsToggle(ctx: Context, user: IUser, key: string): Promise<void> {
-  if (!isToggleKey(key)) return;
-  user.notifications[key].enabled = !user.notifications[key].enabled;
-  await user.save();
-  await ctx.editMessageReplyMarkup(
-    settingsKeyboard(user as unknown as Parameters<typeof settingsKeyboard>[0]).reply_markup
-  );
-}
-
-function isToggleKey(key: string): key is ToggleKey {
-  return ["morningBriefing", "eveningSummary", "breakingUpdates", "weeklyDigest"].includes(key);
+  const n = user.notifications;
+  const lines = [
+    "Here's what you've got set up:",
+    `• Morning Briefing: ${n.morningBriefing.enabled ? `on, ${n.morningBriefing.time}` : "off"}`,
+    `• Evening Summary: ${n.eveningSummary.enabled ? `on, ${n.eveningSummary.time}` : "off"}`,
+    `• Breaking Updates: ${n.breakingUpdates.enabled ? "on" : "off"}`,
+    `• Weekly Digest: ${n.weeklyDigest.enabled ? `on, ${n.weeklyDigest.time}` : "off"}`,
+    user.role ? `• Role: ${user.role}` : undefined,
+    user.topics.length ? `• Tracking: ${user.topics.join(", ")}` : undefined,
+    "",
+    "Just tell me what to change — e.g. \"turn off evening summary\" or \"move my morning briefing to 7am\". /connect to link Gmail, Sheets, or Calendar.",
+  ].filter(Boolean);
+  await ctx.reply(lines.join("\n"));
 }

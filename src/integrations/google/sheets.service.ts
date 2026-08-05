@@ -59,3 +59,38 @@ export async function readSheetData(telegramId: number, sheetId: string, range =
     return { error: "Couldn't read data from that sheet." };
   }
 }
+
+export interface SheetWriteInput {
+  sheetId: string;
+  range: string; // A1 notation, e.g. "Sheet1!A2" for append anchor, or exact range for update
+  values: string[][]; // rows of cell values
+  mode: "append" | "update";
+}
+
+export async function writeSheetData(telegramId: number, input: SheetWriteInput): Promise<{ updatedRange?: string } | { error: string }> {
+  const client = await getAuthorizedGoogleClient(telegramId);
+  if (!client) return { error: "not_connected" };
+
+  try {
+    const sheets = google.sheets({ version: "v4", auth: client });
+    if (input.mode === "append") {
+      const res = await sheets.spreadsheets.values.append({
+        spreadsheetId: input.sheetId,
+        range: input.range,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: input.values },
+      });
+      return { updatedRange: res.data.updates?.updatedRange ?? undefined };
+    }
+    const res = await sheets.spreadsheets.values.update({
+      spreadsheetId: input.sheetId,
+      range: input.range,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: input.values },
+    });
+    return { updatedRange: res.data.updatedRange ?? undefined };
+  } catch (err) {
+    logger.warn("writeSheetData failed", { telegramId, input, err: String(err) });
+    return { error: "Couldn't write to that sheet. Make sure Sheets write access is connected." };
+  }
+}

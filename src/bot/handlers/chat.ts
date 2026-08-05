@@ -1,6 +1,8 @@
 import { Context } from "telegraf";
 import { IUser } from "../../db/models/User";
 import { runAgent } from "../../ai/agent";
+import { getLatestPending } from "../../ai/pendingAction.service";
+import { pendingActionKeyboard } from "../keyboards";
 import { logger } from "../../utils/logger";
 
 export async function handleChatMessage(ctx: Context, user: IUser, text: string): Promise<void> {
@@ -14,7 +16,15 @@ export async function handleChatMessage(ctx: Context, user: IUser, text: string)
 
   try {
     const reply = await runAgent(user.telegramId, text, user);
-    await ctx.reply(reply, { parse_mode: undefined });
+
+    // If the agent just proposed a send/invite/write, offer a one-tap
+    // confirm as a shortcut — typing "yes"/"cancel" still works identically.
+    const pending = await getLatestPending(user.telegramId);
+    if (pending) {
+      await ctx.reply(reply, { parse_mode: undefined, ...pendingActionKeyboard() });
+    } else {
+      await ctx.reply(reply, { parse_mode: undefined });
+    }
   } catch (err) {
     logger.error("agent failed", { telegramId: user.telegramId, err: String(err) });
     await ctx.reply("That's taking longer than expected to look up — mind trying again in a moment?");

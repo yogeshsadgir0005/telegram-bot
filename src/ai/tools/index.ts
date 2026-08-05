@@ -4,5 +4,10 @@ import "./newsTools";
 import "./webSearchTool";
 import "./gmailTools";
 import "./sheetsTools";
+import "./calendarTools";
+import "./pendingActionTools";
+import "./reminderTools";
+import "./profileTools";
+import "./preferenceTools";
 
 export { getRegisteredTools, toOpenAiToolSchemas, findTool } from "./registry";

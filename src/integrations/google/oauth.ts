@@ -3,9 +3,16 @@ import { env } from "../../config/env";
 import { Integration } from "../../db/models/Integration";
 import { logger } from "../../utils/logger";
 
+// gmail.modify (read + send + organize) and full spreadsheets (read + write)
+// and calendar (read + write) are required for the assistant to act on the
+// user's behalf (send replies, log to sheets, create meetings) rather than
+// just read. Every write-capable action still requires the user to
+// explicitly confirm before it executes — see PendingAction.
 export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/spreadsheets.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.send",
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
 
@@ -80,6 +87,18 @@ export async function getAuthorizedGoogleClient(telegramId: number) {
 export async function isGoogleConnected(telegramId: number): Promise<boolean> {
   const integration = await Integration.findOne({ telegramId });
   return Boolean(integration?.google?.connected);
+}
+
+// Users who connected before write scopes were added only have readonly
+// tokens; write actions (send, create event, write sheet) need a reconnect.
+export async function hasWriteScopes(telegramId: number): Promise<boolean> {
+  const integration = await Integration.findOne({ telegramId });
+  const scopes = integration?.google?.scopes ?? [];
+  return (
+    scopes.some((s) => s.includes("gmail.send") || s.includes("gmail.modify")) &&
+    scopes.some((s) => s.includes("calendar")) &&
+    scopes.some((s) => s === "https://www.googleapis.com/auth/spreadsheets")
+  );
 }
 
 export async function disconnectGoogle(telegramId: number): Promise<void> {

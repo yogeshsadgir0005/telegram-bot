@@ -1,17 +1,11 @@
 import { Telegraf } from "telegraf";
 import { env } from "../config/env";
 import { getOrCreateUser } from "../db/services/userService";
-import {
-  beginOnboarding,
-  handleOnboardingText,
-  handleVerticalToggle,
-  handleVerticalContinue,
-  handleScheduleChoice,
-  skipOnboarding,
-} from "./handlers/onboarding";
+import { sendWelcome } from "./handlers/onboarding";
 import { handleChatMessage } from "./handlers/chat";
-import { showSettings, handleSettingsToggle } from "./handlers/settings";
+import { showSettings } from "./handlers/settings";
 import { handleConnect, handleDisconnect, handleAddSheet, handleListSheets } from "./handlers/integrations";
+import { findTool } from "../ai/tools";
 import { logger } from "../utils/logger";
 
 export const bot = new Telegraf(env.telegramBotToken);
@@ -19,19 +13,19 @@ export const bot = new Telegraf(env.telegramBotToken);
 bot.command("start", async (ctx) => {
   const user = await getOrCreateUser(ctx.from);
   if (user.onboardingStep === "done") {
-    await ctx.reply("Welcome back! Ask me anything, or run /settings to adjust preferences.");
+    await ctx.reply("Welcome back! Ask me anything, or /connect to link Gmail, Sheets, or Calendar.");
     return;
   }
-  await beginOnboarding(ctx, user);
+  await sendWelcome(ctx, user);
 });
 
 bot.command("help", async (ctx) => {
   await ctx.reply(
     [
-      "Just talk to me naturally — e.g. \"what happened in markets today\" or \"how's NVDA doing\".",
+      "Just talk to me naturally — e.g. \"what happened in markets today\", \"schedule a meeting with alex@co.com tomorrow 3pm\", \"remind me to review Q3 numbers Friday 9am\".",
       "",
-      "/settings — manage briefing preferences",
-      "/connect — link Gmail & Google Sheets",
+      "/settings — see and change your preferences (just tell me what to change)",
+      "/connect — link Gmail, Sheets & Calendar",
       "/addsheet <link> — connect a spreadsheet",
       "/sheets — list connected spreadsheets",
       "/disconnect — unlink Google account",
@@ -61,42 +55,23 @@ bot.command("sheets", async (ctx) => {
   await handleListSheets(ctx, ctx.from.id);
 });
 
-bot.command("skip", async (ctx) => {
-  const user = await getOrCreateUser(ctx.from);
-  if (user.onboardingStep !== "done") await skipOnboarding(ctx, user);
+// One-tap shortcut for the pending-action confirm gate — equivalent to the
+// user typing "yes"/"cancel", just faster. Calls the same tools the agent
+// itself uses, so behavior is identical either way.
+bot.action("pending:confirm", async (ctx) => {
+  await ctx.answerCbQuery();
+  const tool = findTool("execute_pending_action");
+  if (!tool) return;
+  const result: any = await tool.execute({}, { telegramId: ctx.from!.id });
+  await ctx.reply(result?.error ? result.error : "Done ✅");
 });
 
-bot.action(/^ob:vertical:(.+)$/, async (ctx) => {
-  const value = ctx.match[1];
-  const user = await getOrCreateUser(ctx.from);
+bot.action("pending:cancel", async (ctx) => {
   await ctx.answerCbQuery();
-  if (value === "continue") await handleVerticalContinue(ctx, user);
-  else await handleVerticalToggle(ctx, user, value);
-});
-
-bot.action(/^ob:sched:(.+)$/, async (ctx) => {
-  const value = ctx.match[1];
-  const user = await getOrCreateUser(ctx.from);
-  await ctx.answerCbQuery();
-  await handleScheduleChoice(ctx, user, value);
-});
-
-bot.action("ob:skip", async (ctx) => {
-  const user = await getOrCreateUser(ctx.from);
-  await ctx.answerCbQuery();
-  await skipOnboarding(ctx, user);
-});
-
-bot.action(/^settings:toggle:(.+)$/, async (ctx) => {
-  const key = ctx.match[1];
-  const user = await getOrCreateUser(ctx.from);
-  await ctx.answerCbQuery();
-  await handleSettingsToggle(ctx, user, key);
-});
-
-bot.action("settings:connect_google", async (ctx) => {
-  await ctx.answerCbQuery();
-  await handleConnect(ctx, ctx.from.id);
+  const tool = findTool("cancel_pending_action");
+  if (!tool) return;
+  await tool.execute({}, { telegramId: ctx.from!.id });
+  await ctx.reply("Cancelled.");
 });
 
 bot.on("text", async (ctx) => {
@@ -105,8 +80,9 @@ bot.on("text", async (ctx) => {
   if (!text || text.startsWith("/")) return;
 
   if (user.onboardingStep !== "done") {
-    await handleOnboardingText(ctx, user, text);
-    return;
+    // New user chatting without ever typing /start — greet them, then still
+    // respond to what they actually said instead of discarding it.
+    await sendWelcome(ctx, user);
   }
 
   await handleChatMessage(ctx, user, text);

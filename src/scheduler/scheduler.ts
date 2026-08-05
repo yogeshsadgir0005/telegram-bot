@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { Telegraf } from "telegraf";
 import { User, IUser } from "../db/models/User";
 import { BriefingLog, BriefingType } from "../db/models/BriefingLog";
+import { Reminder } from "../db/models/Reminder";
 import { generateBriefing, logBriefing } from "./briefing.service";
 import { currentTimeInTz } from "./time";
 import { logger } from "../utils/logger";
@@ -53,6 +54,20 @@ export function startScheduler(bot: Telegraf): void {
         if (!(await alreadyProcessedToday(user.telegramId, "weekly", 6 * 24))) {
           runBriefingForUser(bot, user, "weekly").catch((err) => logger.error("weekly digest error", { err: String(err) }));
         }
+      }
+    }
+  });
+
+  // Every minute: fire any reminders that have come due.
+  cron.schedule("* * * * *", async () => {
+    const due = await Reminder.find({ sent: false, dueAt: { $lte: new Date() } });
+    for (const reminder of due) {
+      try {
+        await bot.telegram.sendMessage(reminder.telegramId, `⏰ ${reminder.message}`);
+        reminder.sent = true;
+        await reminder.save();
+      } catch (err) {
+        logger.warn("failed to send reminder", { telegramId: reminder.telegramId, err: String(err) });
       }
     }
   });

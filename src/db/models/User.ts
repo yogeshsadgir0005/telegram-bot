@@ -10,13 +10,10 @@ export interface IUser extends Document {
   username?: string;
   firstName?: string;
 
-  onboardingStep:
-    | "start"
-    | "role"
-    | "verticals"
-    | "topics"
-    | "schedule"
-    | "done";
+  // "start": hasn't received the welcome message yet. "done": conversation is
+  // open — profile fields fill in incrementally via update_user_profile as
+  // they come up, there is no multi-step form to complete.
+  onboardingStep: "start" | "done";
   onboardingSkipped: boolean;
 
   role?: string; // what the user does day to day
@@ -59,7 +56,7 @@ const userSchema = new Schema<IUser>(
 
     onboardingStep: {
       type: String,
-      enum: ["start", "role", "verticals", "topics", "schedule", "done"],
+      enum: ["start", "done"],
       default: "start",
     },
     onboardingSkipped: { type: Boolean, default: false },
