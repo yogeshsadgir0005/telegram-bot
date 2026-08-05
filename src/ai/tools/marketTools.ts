@@ -12,7 +12,8 @@ registerTool({
       symbols: {
         type: "array",
         items: { type: "string" },
-        description: "Ticker symbols, e.g. ['AAPL', 'MSFT']. Use Yahoo Finance style symbols.",
+        description:
+          "Ticker symbols, e.g. ['AAPL', 'MSFT']. Common index names also work directly without searching: NIFTY, SENSEX, BANKNIFTY, S&P 500, DOW, NASDAQ, FTSE, NIKKEI, DAX, HANG SENG.",
       },
     },
     required: ["symbols"],
@@ -41,7 +42,7 @@ registerTool({
   parameters: {
     type: "object",
     properties: {
-      symbol: { type: "string", description: "Ticker symbol, e.g. 'AAPL'." },
+      symbol: { type: "string", description: "Ticker symbol, e.g. 'AAPL', or a common index name like NIFTY/SENSEX/S&P 500 — no need to search first." },
       days: { type: ["number", "string"], description: "Lookback period in trading days, default 90 (~3 months). Use ~20 for 1 month, ~250 for 1 year." },
     },
     required: ["symbol"],
@@ -69,7 +70,7 @@ registerTool({
 registerTool({
   name: "search_ticker_symbol",
   description:
-    "Resolve a company name to its stock ticker symbol when the user mentions a company but not its ticker (e.g. 'Nvidia' -> 'NVDA').",
+    "Resolve a company name to its stock ticker symbol when the user mentions a company but not its ticker (e.g. 'Nvidia' -> 'NVDA'). Not needed for common indices (NIFTY, SENSEX, S&P 500, etc.) — pass those names directly to get_stock_quote/get_stock_trend instead.",
   parameters: {
     type: "object",
     properties: {

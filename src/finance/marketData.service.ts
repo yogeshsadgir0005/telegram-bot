@@ -4,6 +4,34 @@ import { logger } from "../utils/logger";
 
 yahooFinance.suppressNotices(["yahooSurvey"]);
 
+// Common index names the model would otherwise have to resolve via a slow,
+// rate-limited symbol search — resolving these directly avoids burning tool
+// iterations guessing (this caused real multi-minute timeouts in practice,
+// e.g. "how has NIFTY been trending" repeatedly failing to find a symbol).
+const INDEX_ALIASES: Record<string, string> = {
+  "S&P500": "^GSPC",
+  "S&P 500": "^GSPC",
+  SPX: "^GSPC",
+  DOW: "^DJI",
+  "DOW JONES": "^DJI",
+  NASDAQ: "^IXIC",
+  NIFTY: "^NSEI",
+  "NIFTY50": "^NSEI",
+  "NIFTY 50": "^NSEI",
+  SENSEX: "^BSESN",
+  BANKNIFTY: "^NSEBANK",
+  "BANK NIFTY": "^NSEBANK",
+  FTSE: "^FTSE",
+  "FTSE 100": "^FTSE",
+  NIKKEI: "^N225",
+  "HANG SENG": "^HSI",
+  DAX: "^GDAXI",
+};
+
+function resolveSymbol(symbol: string): string {
+  return INDEX_ALIASES[symbol.trim().toUpperCase()] ?? symbol;
+}
+
 export interface Quote {
   symbol: string;
   shortName?: string;
@@ -79,7 +107,8 @@ async function getQuoteFromStooq(symbol: string): Promise<Quote | null> {
   };
 }
 
-export async function getQuote(symbol: string): Promise<Quote | null> {
+export async function getQuote(rawSymbol: string): Promise<Quote | null> {
+  const symbol = resolveSymbol(rawSymbol);
   try {
     const q = await getQuoteFromYahoo(symbol);
     if (q) return q;
@@ -122,31 +151,52 @@ export interface PricePoint {
   close: number;
 }
 
-// Same Stooq endpoint the quote fallback uses, but keeping the full history
-// instead of just the last two rows — this is the data source for trend
-// analysis (stock analysis is the product's primary focus, not just a spot
-// price lookup).
-export async function getPriceHistory(symbol: string, days = 90): Promise<PricePoint[] | null> {
+async function getPriceHistoryFromYahoo(symbol: string, days: number): Promise<PricePoint[] | null> {
+  const period1 = new Date(Date.now() - (days + 10) * 24 * 60 * 60 * 1000); // pad for weekends/holidays
+  const chart = await yahooFinance.chart(symbol, { period1, interval: "1d" });
+  const points: PricePoint[] = (chart.quotes ?? [])
+    .filter((q) => typeof q.close === "number" && q.date)
+    .map((q) => ({ date: q.date.toISOString().slice(0, 10), close: q.close as number }));
+  return points.length >= 2 ? points.slice(-days) : null;
+}
+
+// Index symbols (^NSEI, ^GSPC, ...) don't get a Stooq ".us" suffix; Stooq's
+// coverage of non-US tickers is inconsistent, so this is a fallback only —
+// Yahoo (tried first) has much better international/index coverage.
+async function getPriceHistoryFromStooq(symbol: string, days: number): Promise<PricePoint[] | null> {
+  const stooqSymbol = symbol.startsWith("^") || symbol.includes(".") ? symbol.toLowerCase() : `${symbol.toLowerCase()}.us`;
+  const res = await axios.get("https://stooq.com/q/d/l/", {
+    params: { s: stooqSymbol, i: "d" },
+    timeout: 8000,
+  });
+  const lines: string[] = String(res.data).trim().split("\n");
+  if (lines.length < 3 || !lines[0].startsWith("Date")) return null;
+
+  const points: PricePoint[] = lines
+    .slice(1)
+    .map((line) => {
+      const [date, , , , close] = line.split(",");
+      return { date, close: Number(close) };
+    })
+    .filter((p) => p.date && Number.isFinite(p.close));
+
+  return points.length >= 2 ? points.slice(-days) : null;
+}
+
+export async function getPriceHistory(rawSymbol: string, days = 90): Promise<PricePoint[] | null> {
+  const symbol = resolveSymbol(rawSymbol);
+
   try {
-    const stooqSymbol = symbol.includes(".") ? symbol.toLowerCase() : `${symbol.toLowerCase()}.us`;
-    const res = await axios.get("https://stooq.com/q/d/l/", {
-      params: { s: stooqSymbol, i: "d" },
-      timeout: 8000,
-    });
-    const lines: string[] = String(res.data).trim().split("\n");
-    if (lines.length < 3 || !lines[0].startsWith("Date")) return null;
-
-    const points: PricePoint[] = lines
-      .slice(1)
-      .map((line) => {
-        const [date, , , , close] = line.split(",");
-        return { date, close: Number(close) };
-      })
-      .filter((p) => p.date && Number.isFinite(p.close));
-
-    return points.slice(-days);
+    const points = await getPriceHistoryFromYahoo(symbol, days);
+    if (points) return points;
   } catch (err) {
-    logger.warn("getPriceHistory failed", { symbol, err: String(err) });
+    logger.warn("getPriceHistoryFromYahoo failed, falling back to Stooq", { symbol, err: String(err) });
+  }
+
+  try {
+    return await getPriceHistoryFromStooq(symbol, days);
+  } catch (err) {
+    logger.warn("getPriceHistoryFromStooq failed", { symbol, err: String(err) });
     return null;
   }
 }
