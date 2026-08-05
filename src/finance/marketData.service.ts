@@ -1,5 +1,6 @@
 import yahooFinance from "yahoo-finance2";
 import axios from "axios";
+import { env } from "../config/env";
 import { logger } from "../utils/logger";
 
 yahooFinance.suppressNotices(["yahooSurvey"]);
@@ -52,6 +53,27 @@ export interface Quote {
   fiftyTwoWeekLow?: number;
   dividendYield?: number;
   epsTrailingTwelveMonths?: number;
+}
+
+// Finnhub — key-based, not scraped, 60 req/min free tier. Tried first when
+// configured since Yahoo (unofficial) and Stooq (bot-challenged) have both
+// shown unreliable access in practice, including from production.
+async function getQuoteFromFinnhub(symbol: string): Promise<Quote | null> {
+  const res = await axios.get("https://finnhub.io/api/v1/quote", {
+    params: { symbol, token: env.finnhubApiKey },
+    timeout: 8000,
+  });
+  const d = res.data;
+  if (!d || typeof d.c !== "number" || d.c === 0) return null;
+  return {
+    symbol: symbol.toUpperCase(),
+    price: d.c,
+    change: d.d,
+    changePercent: d.dp,
+    previousClose: d.pc,
+    dayHigh: d.h,
+    dayLow: d.l,
+  };
 }
 
 async function getQuoteFromYahoo(symbol: string): Promise<Quote | null> {
@@ -109,6 +131,16 @@ async function getQuoteFromStooq(symbol: string): Promise<Quote | null> {
 
 export async function getQuote(rawSymbol: string): Promise<Quote | null> {
   const symbol = resolveSymbol(rawSymbol);
+
+  if (env.finnhubApiKey) {
+    try {
+      const q = await getQuoteFromFinnhub(symbol);
+      if (q) return q;
+    } catch (err) {
+      logger.warn("getQuoteFromFinnhub failed, falling back to Yahoo", { symbol, err: String(err) });
+    }
+  }
+
   try {
     const q = await getQuoteFromYahoo(symbol);
     if (q) return q;
@@ -151,6 +183,48 @@ export interface PricePoint {
   close: number;
 }
 
+// Finnhub's free tier restricts /stock/candle for some symbols/plans — this
+// degrades to null (not an error) so the Yahoo/Stooq fallback chain handles it.
+async function getPriceHistoryFromFinnhub(symbol: string, days: number): Promise<PricePoint[] | null> {
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - (days + 10) * 24 * 60 * 60;
+  const res = await axios.get("https://finnhub.io/api/v1/stock/candle", {
+    params: { symbol, resolution: "D", from, to, token: env.finnhubApiKey },
+    timeout: 8000,
+  });
+  const d = res.data;
+  if (!d || d.s !== "ok" || !Array.isArray(d.c) || d.c.length < 2) return null;
+
+  const points: PricePoint[] = d.t.map((t: number, i: number) => ({
+    date: new Date(t * 1000).toISOString().slice(0, 10),
+    close: d.c[i],
+  }));
+  return points.slice(-days);
+}
+
+// Twelve Data doesn't paywall historical time-series on the free tier
+// (unlike Finnhub) and covers NSE — tried before Yahoo/Stooq for that reason.
+function toTwelveDataSymbol(symbol: string): string {
+  if (symbol.endsWith(".NS")) return `${symbol.slice(0, -3)}:NSE`;
+  return symbol.replace(/^\^/, "");
+}
+
+async function getPriceHistoryFromTwelveData(symbol: string, days: number): Promise<PricePoint[] | null> {
+  const res = await axios.get("https://api.twelvedata.com/time_series", {
+    params: { symbol: toTwelveDataSymbol(symbol), interval: "1day", outputsize: days, apikey: env.twelveDataApiKey },
+    timeout: 8000,
+  });
+  const d = res.data;
+  if (!d || d.status === "error" || !Array.isArray(d.values) || d.values.length < 2) return null;
+
+  const points: PricePoint[] = d.values
+    .map((v: { datetime: string; close: string }) => ({ date: v.datetime, close: Number(v.close) }))
+    .filter((p: PricePoint) => Number.isFinite(p.close))
+    .reverse(); // Twelve Data returns newest-first
+
+  return points.length >= 2 ? points : null;
+}
+
 async function getPriceHistoryFromYahoo(symbol: string, days: number): Promise<PricePoint[] | null> {
   const period1 = new Date(Date.now() - (days + 10) * 24 * 60 * 60 * 1000); // pad for weekends/holidays
   const chart = await yahooFinance.chart(symbol, { period1, interval: "1d" });
@@ -185,6 +259,24 @@ async function getPriceHistoryFromStooq(symbol: string, days: number): Promise<P
 
 export async function getPriceHistory(rawSymbol: string, days = 90): Promise<PricePoint[] | null> {
   const symbol = resolveSymbol(rawSymbol);
+
+  if (env.finnhubApiKey) {
+    try {
+      const points = await getPriceHistoryFromFinnhub(symbol, days);
+      if (points) return points;
+    } catch (err) {
+      logger.warn("getPriceHistoryFromFinnhub failed, falling back to Twelve Data", { symbol, err: String(err) });
+    }
+  }
+
+  if (env.twelveDataApiKey) {
+    try {
+      const points = await getPriceHistoryFromTwelveData(symbol, days);
+      if (points) return points;
+    } catch (err) {
+      logger.warn("getPriceHistoryFromTwelveData failed, falling back to Yahoo", { symbol, err: String(err) });
+    }
+  }
 
   try {
     const points = await getPriceHistoryFromYahoo(symbol, days);

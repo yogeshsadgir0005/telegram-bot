@@ -14,7 +14,7 @@ A conversational AI personal assistant that lives inside Telegram — not a chat
 ```
 Telegram  <->  Telegraf bot  <->  Agent (Groq / openai-gpt-oss-120b, tool-calling)
                     |                      |
-                    |                      +-- market data (Yahoo Finance + Stooq fallback)
+                    |                      +-- market data (Finnhub quotes + Twelve Data trends, Yahoo/Stooq fallback)
                     |                      +-- finance news (RSS: Yahoo/MarketWatch/CNBC/Investing.com)
                     |                      +-- web search (DuckDuckGo, no key required)
                     |                      +-- profile & preferences (continuous learning, no forms)
@@ -96,9 +96,14 @@ Atlas AI defaults to **Groq** (`openai/gpt-oss-120b`) rather than NVIDIA NIM. Du
 ## Notes on data sources
 
 No paid APIs are required to run this end-to-end:
-- **Quotes**: Yahoo Finance (via `yahoo-finance2`, no key), falling back to Stooq end-of-day data if rate-limited
+- **Quotes**: Finnhub (free, key-based) primary, falling back to Yahoo Finance then Stooq end-of-day data
+- **Trend/historical analysis**: Twelve Data (free, key-based) primary — Finnhub's free tier paywalls historical candles, so it's quote-only — falling back to Yahoo then Stooq
 - **News**: public RSS feeds (Yahoo Finance, MarketWatch, CNBC, Investing.com)
 - **Web search fallback**: DuckDuckGo HTML search (no key)
 - **AI**: Groq free-tier API (`openai/gpt-oss-120b`)
 
-These free tiers are rate-limited; swap in paid providers later by editing `src/finance/` and `.env` without touching the bot/agent logic.
+Both `FINNHUB_API_KEY` and `TWELVEDATA_API_KEY` are optional — without them, everything falls back to Yahoo/Stooq (scraped, less reliable under load) but the bot still runs. With them, quotes and trends were verified working end-to-end with real live data for US/major-market tickers during development.
+
+**Known limitation**: neither Finnhub's nor Twelve Data's free tier includes Indian exchange (NSE/BSE) data — both return explicit "upgrade your plan" errors for it, confirmed directly against their APIs. NIFTY/SENSEX/Indian-stock queries fall back to Yahoo/Stooq, which are less reliable (unofficial/scraped, subject to rate-limiting). This is an upstream data-licensing constraint common to free-tier finance APIs, not something fixable in this codebase without a paid data source. The system prompt tells the model to state this plainly rather than retry.
+
+These free tiers are rate-limited; swap in paid providers later by editing `src/finance/marketData.service.ts` and `.env` without touching the bot/agent logic.
