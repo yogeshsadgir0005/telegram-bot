@@ -6,6 +6,23 @@ import { createServer } from "./server";
 import { startScheduler } from "./scheduler/scheduler";
 import { logger } from "./utils/logger";
 
+// Telegram's API occasionally has transient connectivity blips from some
+// hosts on startup; retry with backoff instead of crash-looping the deploy
+// on a single failed request.
+async function launchBotWithRetry(maxAttempts = 5): Promise<void> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await bot.launch();
+      return;
+    } catch (err) {
+      if (attempt === maxAttempts) throw err;
+      const delayMs = Math.min(2000 * 2 ** (attempt - 1), 30_000);
+      logger.warn("bot.launch() failed, retrying", { attempt, delayMs, err: String(err) });
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 async function main() {
   await connectDb();
 
@@ -14,7 +31,7 @@ async function main() {
 
   startScheduler(bot);
 
-  await bot.launch();
+  await launchBotWithRetry();
   logger.info("Atlas AI bot is running");
 }
 
