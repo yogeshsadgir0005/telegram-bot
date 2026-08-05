@@ -7,15 +7,14 @@ type PreferenceKey = (typeof VALID_KEYS)[number];
 
 registerTool({
   name: "update_notification_preference",
-  description:
-    "Turn a recurring update on/off or change its time, based on what the user says in conversation (e.g. 'turn off evening summary', 'move my morning briefing to 7am'). Valid keys: morningBriefing, eveningSummary, breakingUpdates, weeklyDigest.",
+  description: "Turn a recurring update on/off or change its time (e.g. 'turn off evening summary', 'move morning briefing to 7am').",
   parameters: {
     type: "object",
     properties: {
       key: { type: "string", enum: VALID_KEYS as unknown as string[] },
-      enabled: { type: "boolean", description: "true to turn on, false to turn off." },
-      time: { type: "string", description: "24h HH:mm, e.g. '07:00'. Not applicable to breakingUpdates." },
-      dayOfWeek: { type: ["number", "string"], description: "0=Sunday..6=Saturday. Only applies to weeklyDigest." },
+      enabled: { type: "boolean" },
+      time: { type: "string", description: "24h HH:mm. Not for breakingUpdates." },
+      dayOfWeek: { type: ["number", "string"], description: "0=Sun..6=Sat. weeklyDigest only." },
     },
     required: ["key"],
   },
@@ -36,7 +35,7 @@ registerTool({
 
 registerTool({
   name: "get_current_preferences",
-  description: "Get the user's current notification preferences and profile so you can describe them in conversation (e.g. when asked 'what are my settings').",
+  description: "Get the user's current notification preferences and profile to describe conversationally.",
   parameters: { type: "object", properties: {} },
   execute: async (_args, ctx) => {
     const user = await User.findOne({ telegramId: ctx.telegramId });

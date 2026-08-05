@@ -4,26 +4,20 @@ import { toNumber } from "./coerce";
 
 registerTool({
   name: "get_finance_news",
-  description:
-    "Get the latest general finance/market news headlines from trusted sources (Yahoo Finance, MarketWatch, CNBC, Investing.com). Use for broad 'what happened today' style questions.",
+  description: "Latest general finance/market headlines (Yahoo, MarketWatch, CNBC, Investing.com). For broad 'what happened today' questions.",
   parameters: {
     type: "object",
-    properties: {
-      limit: { type: ["number", "string"], description: "Max number of headlines to return, default 15." },
-    },
+    properties: { limit: { type: ["number", "string"], description: "Max headlines, default 15." } },
   },
   execute: async ({ limit }: { limit?: number | string }) => fetchFinanceNews(toNumber(limit) ?? 15),
 });
 
 registerTool({
   name: "search_finance_news",
-  description:
-    "Search recent finance/market news for a specific company, ticker, or topic. Use when the user asks about news related to a specific company or subject.",
+  description: "Search recent finance news for a specific company, ticker, or topic.",
   parameters: {
     type: "object",
-    properties: {
-      query: { type: "string", description: "Company name, ticker, or topic to search news for." },
-    },
+    properties: { query: { type: "string", description: "Company, ticker, or topic." } },
     required: ["query"],
   },
   execute: async ({ query }: { query: string }) => fetchNewsForQuery(query),

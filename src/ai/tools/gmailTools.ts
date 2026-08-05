@@ -5,13 +5,10 @@ import { toNumber } from "./coerce";
 
 registerTool({
   name: "get_inbox_summary",
-  description:
-    "Get the user's recent inbox emails (sender, subject, snippet) so you can identify what's actually important and summarize it. Only works if the user has connected Gmail; if it returns not_connected, tell the user to run /connect to link Gmail.",
+  description: "Recent inbox emails (sender, subject, snippet) to identify what's important. Needs Gmail connected — if not_connected, tell user to run /connect.",
   parameters: {
     type: "object",
-    properties: {
-      maxResults: { type: ["number", "string"], description: "Max number of recent emails to fetch, default 20." },
-    },
+    properties: { maxResults: { type: ["number", "string"], description: "Max emails, default 20." } },
   },
   execute: async ({ maxResults }: { maxResults?: number | string }, ctx) => {
     const items = await getRecentInboxItems(ctx.telegramId, toNumber(maxResults) ?? 20);
@@ -22,15 +19,14 @@ registerTool({
 
 registerTool({
   name: "propose_email_send",
-  description:
-    "Draft a new email or reply for the user to confirm. Does NOT send it — sending must always be confirmed by the user first via execute_pending_action. To reply to an existing email, pass its id (from get_inbox_summary) as replyToMessageId.",
+  description: "Draft an email/reply for confirmation. Does NOT send. Pass replyToMessageId (from get_inbox_summary) to reply to an existing email.",
   parameters: {
     type: "object",
     properties: {
-      to: { type: "string", description: "Recipient email address." },
+      to: { type: "string", description: "Recipient." },
       subject: { type: "string" },
-      body: { type: "string", description: "Plain text email body." },
-      replyToMessageId: { type: "string", description: "Optional: id of the email being replied to." },
+      body: { type: "string", description: "Plain text body." },
+      replyToMessageId: { type: "string" },
     },
     required: ["to", "subject", "body"],
   },

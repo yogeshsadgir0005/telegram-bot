@@ -4,20 +4,19 @@ import { proposeAction } from "../pendingAction.service";
 
 registerTool({
   name: "list_connected_sheets",
-  description: "List the Google Sheets the user has connected. Use this to find a sheetId before reading data, or when the user asks what sheets are connected.",
+  description: "List the user's connected Google Sheets (to find a sheetId).",
   parameters: { type: "object", properties: {} },
   execute: async (_args, ctx) => listConnectedSheets(ctx.telegramId),
 });
 
 registerTool({
   name: "read_sheet_data",
-  description:
-    "Read raw row/column data from a connected Google Sheet to answer questions, spot trends, or detect anomalies. Call list_connected_sheets first if you don't know the sheetId.",
+  description: "Read row/column data from a connected sheet to answer questions or spot trends. Call list_connected_sheets first if sheetId unknown.",
   parameters: {
     type: "object",
     properties: {
-      sheetId: { type: "string", description: "The Google Sheet ID (from list_connected_sheets)." },
-      range: { type: "string", description: "A1 notation range, e.g. 'A1:F100'. Defaults to a broad range." },
+      sheetId: { type: "string" },
+      range: { type: "string", description: "A1 notation, e.g. 'A1:F100'. Defaults to broad range." },
     },
     required: ["sheetId"],
   },
@@ -27,22 +26,14 @@ registerTool({
 
 registerTool({
   name: "propose_sheet_write",
-  description:
-    "Draft a write (append new rows, or update a range) to a connected Google Sheet for the user to confirm. Does NOT write — writing must always be confirmed by the user first via execute_pending_action.",
+  description: "Draft an append/update to a connected sheet for confirmation. Does NOT write.",
   parameters: {
     type: "object",
     properties: {
-      sheetId: { type: "string", description: "The Google Sheet ID." },
-      range: {
-        type: "string",
-        description: "A1 notation. For append, a sheet/anchor like 'Sheet1!A1'. For update, the exact target range.",
-      },
-      values: {
-        type: "array",
-        items: { type: "array", items: { type: "string" } },
-        description: "Rows of cell values to write, e.g. [[\"2026-08-08\", \"Groceries\", \"42.50\"]].",
-      },
-      mode: { type: "string", enum: ["append", "update"], description: "append adds new rows; update overwrites the given range." },
+      sheetId: { type: "string" },
+      range: { type: "string", description: "A1 notation — anchor like 'Sheet1!A1' for append, exact range for update." },
+      values: { type: "array", items: { type: "array", items: { type: "string" } }, description: "Rows to write." },
+      mode: { type: "string", enum: ["append", "update"] },
     },
     required: ["sheetId", "range", "values", "mode"],
   },

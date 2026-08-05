@@ -3,8 +3,7 @@ import { webSearch } from "./webSearch";
 
 registerTool({
   name: "web_search",
-  description:
-    "Search the live web for information not covered by the finance news or quote tools (e.g. general company info, regulatory filings, official announcements, definitions). Only use when local tools are insufficient. Always cite the source URL in your response.",
+  description: "Live web search for info not covered by finance/news tools. Use only when those are insufficient; cite the source URL.",
   parameters: {
     type: "object",
     properties: {

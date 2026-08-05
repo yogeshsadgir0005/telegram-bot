@@ -9,14 +9,13 @@ import { isGoogleConnected } from "../../integrations/google/oauth";
 // fight the goal of feeling like a fast, natural assistant rather than a form.
 registerTool({
   name: "create_reminder",
-  description:
-    "Set a reminder for the user. Resolve any natural-language time (e.g. 'tomorrow at 5pm') into ISO 8601 yourself using today's date before calling. If the user has Google connected, this also adds a personal (no-attendee) event to their Calendar unless they say Telegram-only.",
+  description: "Set a reminder. Resolve natural-language time to ISO 8601 first. Also adds a personal Calendar event if connected, unless Telegram-only requested.",
   parameters: {
     type: "object",
     properties: {
-      message: { type: "string", description: "What to remind the user about." },
-      dueAtIso: { type: "string", description: "When to send the reminder, ISO 8601." },
-      alsoAddToCalendar: { type: "boolean", description: "Default true when Google is connected." },
+      message: { type: "string" },
+      dueAtIso: { type: "string", description: "ISO 8601." },
+      alsoAddToCalendar: { type: "boolean", description: "Default true if Google connected." },
     },
     required: ["message", "dueAtIso"],
   },

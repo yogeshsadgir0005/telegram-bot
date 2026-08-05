@@ -5,12 +5,10 @@ import { toNumber } from "./coerce";
 
 registerTool({
   name: "get_upcoming_events",
-  description: "Get the user's upcoming Google Calendar events (title, time, attendees). Read-only, safe to call directly.",
+  description: "User's upcoming Calendar events (title, time, attendees). Read-only, safe to call directly.",
   parameters: {
     type: "object",
-    properties: {
-      maxResults: { type: ["number", "string"], description: "Max events to return, default 10." },
-    },
+    properties: { maxResults: { type: ["number", "string"], description: "Max events, default 10." } },
   },
   execute: async ({ maxResults }: { maxResults?: number | string }, ctx) => {
     const events = await listUpcomingEvents(ctx.telegramId, toNumber(maxResults) ?? 10);
@@ -21,17 +19,16 @@ registerTool({
 
 registerTool({
   name: "propose_calendar_event",
-  description:
-    "Draft a calendar meeting for the user to confirm. Does NOT create the event — creating it sends real invite emails to attendees, so it must always be confirmed by the user first via execute_pending_action. Resolve any natural-language date/time (e.g. 'next Tuesday 3pm') into ISO 8601 yourself using today's date before calling this.",
+  description: "Draft a meeting for confirmation. Does NOT create it (creating emails real invites). Resolve natural-language date/time to ISO 8601 yourself first.",
   parameters: {
     type: "object",
     properties: {
-      title: { type: "string", description: "Meeting title." },
-      startIso: { type: "string", description: "Start time, ISO 8601, e.g. 2026-08-08T21:00:00." },
-      endIso: { type: "string", description: "End time, ISO 8601. Default to 30-60 min after start if not specified." },
-      attendeeEmails: { type: "array", items: { type: "string" }, description: "Email addresses of people to invite." },
-      description: { type: "string", description: "Optional meeting description/agenda." },
-      timezone: { type: "string", description: "IANA timezone, e.g. Asia/Kolkata. Default UTC if unknown." },
+      title: { type: "string" },
+      startIso: { type: "string", description: "ISO 8601, e.g. 2026-08-08T21:00:00." },
+      endIso: { type: "string", description: "ISO 8601, default 30-60min after start." },
+      attendeeEmails: { type: "array", items: { type: "string" } },
+      description: { type: "string" },
+      timezone: { type: "string", description: "IANA tz, e.g. Asia/Kolkata." },
     },
     required: ["title", "startIso", "endIso"],
   },

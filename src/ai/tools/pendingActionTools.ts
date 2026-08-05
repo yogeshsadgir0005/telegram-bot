@@ -6,8 +6,7 @@ import { writeSheetData } from "../../integrations/google/sheets.service";
 
 registerTool({
   name: "execute_pending_action",
-  description:
-    "Actually perform the most recently proposed action (email send, calendar event, or sheet write) for this user. ONLY call this when the user's most recent message clearly and explicitly confirms it (e.g. 'yes', 'send it', 'go ahead', 'confirm'). If there is any ambiguity about what they're confirming, ask instead of calling this.",
+  description: "Perform the most recently proposed action. ONLY call when the user's latest message unambiguously confirms it ('yes'/'send it'/'confirm'). Ask instead if unsure.",
   parameters: { type: "object", properties: {} },
   execute: async (_args, ctx) => {
     const pending = await getLatestPending(ctx.telegramId);
@@ -29,7 +28,7 @@ registerTool({
 
 registerTool({
   name: "cancel_pending_action",
-  description: "Cancel the most recently proposed action instead of executing it. Call this when the user declines or asks to change something.",
+  description: "Cancel the most recently proposed action. Call when the user declines or wants to change it.",
   parameters: { type: "object", properties: {} },
   execute: async (_args, ctx) => {
     const pending = await getLatestPending(ctx.telegramId);

@@ -7,8 +7,14 @@ import { Message } from "../db/models/Message";
 import { recordToolUsage } from "./personalization.service";
 import { logger } from "../utils/logger";
 
-const HISTORY_LIMIT = 12; // recent turns kept as raw context
-const MAX_TOOL_ITERATIONS = 5;
+// Kept small on purpose: system prompt + 22 tool schemas + history all count
+// against a strict free-tier tokens-per-minute budget (8000 TPM observed on
+// Groq for this model) — a real conversation was hitting that ceiling.
+const HISTORY_LIMIT = 6;
+// Bounded lower than "feels generous" on purpose: the model doesn't always
+// follow the "don't retry on missing data" instruction, and each extra
+// iteration both adds latency and eats further into the TPM budget above.
+const MAX_TOOL_ITERATIONS = 3;
 
 async function loadHistory(telegramId: number): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam[]> {
   const recent = await Message.find({ telegramId }).sort({ createdAt: -1 }).limit(HISTORY_LIMIT).lean();
@@ -36,7 +42,7 @@ export async function runAgent(telegramId: number, userMessage: string, user: IU
       tools: tools.length ? tools : undefined,
       tool_choice: tools.length ? "auto" : undefined,
       temperature: 0.4,
-      max_tokens: 700,
+      max_tokens: 400,
     });
 
     const choice = completion.choices[0];
@@ -66,7 +72,7 @@ export async function runAgent(telegramId: number, userMessage: string, user: IU
       messages.push({
         role: "tool",
         tool_call_id: call.id,
-        content: JSON.stringify(result).slice(0, 8000),
+        content: JSON.stringify(result).slice(0, 3000),
       });
     }
 
