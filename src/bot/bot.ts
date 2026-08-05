@@ -8,7 +8,12 @@ import { handleConnect, handleDisconnect, handleAddSheet, handleListSheets } fro
 import { findTool } from "../ai/tools";
 import { logger } from "../utils/logger";
 
-export const bot = new Telegraf(env.telegramBotToken);
+// Telegraf's default handlerTimeout (90s) is shorter than our LLM client's
+// own timeout (150s), so it was killing slow-but-still-in-progress AI
+// responses before they could finish or fail on their own terms. This must
+// stay comfortably above the LLM timeout, including the worst case of two
+// sequential tool-calling round-trips in one turn.
+export const bot = new Telegraf(env.telegramBotToken, { handlerTimeout: 280_000 });
 
 bot.command("start", async (ctx) => {
   const user = await getOrCreateUser(ctx.from);

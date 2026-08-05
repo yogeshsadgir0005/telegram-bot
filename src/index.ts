@@ -29,10 +29,16 @@ async function main() {
   const app = createServer(bot);
   app.listen(env.port, () => logger.info(`HTTP server listening on port ${env.port}`));
 
-  startScheduler(bot);
-
+  // Start the scheduler only after this instance has actually won the
+  // Telegram long-polling lock. During a redeploy, an old instance can
+  // briefly overlap with the new one — starting the scheduler before
+  // launch() succeeds meant a "losing" instance would still run cron jobs
+  // (duplicate scheduled messages, duplicate API hammering) even though it
+  // never actually owns message delivery.
   await launchBotWithRetry();
   logger.info("Atlas AI bot is running");
+
+  startScheduler(bot);
 }
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
