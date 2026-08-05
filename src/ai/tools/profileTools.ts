@@ -35,7 +35,10 @@ registerTool({
     const addToSet: Record<string, unknown> = {};
 
     if (args.role) update.role = args.role;
-    if (args.timezone) update.timezone = args.timezone;
+    if (args.timezone) {
+      update.timezone = args.timezone;
+      update.timezoneConfirmed = true;
+    }
     if (args.addVerticals?.length) addToSet.verticals = { $each: args.addVerticals.map((v) => v.toLowerCase()) };
     if (args.addTopics?.length) addToSet.topics = { $each: args.addTopics };
     if (args.addIndustries?.length) addToSet.industries = { $each: args.addIndustries };

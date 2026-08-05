@@ -22,7 +22,8 @@ export interface IUser extends Document {
   industries: string[]; // followed industries
   companiesFollowed: string[]; // tickers / company names
 
-  timezone: string; // IANA tz, default UTC
+  timezone: string; // IANA tz, defaults to UTC until the user actually confirms one
+  timezoneConfirmed: boolean; // false = "UTC" is just an unset default, not a real answer
   notifications: {
     morningBriefing: NotificationWindow;
     eveningSummary: NotificationWindow;
@@ -68,6 +69,7 @@ const userSchema = new Schema<IUser>(
     companiesFollowed: { type: [String], default: [] },
 
     timezone: { type: String, default: "UTC" },
+    timezoneConfirmed: { type: Boolean, default: false },
     notifications: {
       morningBriefing: { type: notificationWindowSchema, default: () => ({ enabled: true, time: "08:00" }) },
       eveningSummary: { type: notificationWindowSchema, default: () => ({ enabled: false, time: "18:00" }) },
