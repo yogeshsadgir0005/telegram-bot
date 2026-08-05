@@ -11,10 +11,13 @@ import { logger } from "../utils/logger";
 // against a strict free-tier tokens-per-minute budget (8000 TPM observed on
 // Groq for this model) — a real conversation was hitting that ceiling.
 const HISTORY_LIMIT = 6;
-// Bounded lower than "feels generous" on purpose: the model doesn't always
-// follow the "don't retry on missing data" instruction, and each extra
-// iteration both adds latency and eats further into the TPM budget above.
-const MAX_TOOL_ITERATIONS = 3;
+// Empirically traced: a stock question alone can take trend -> news ->
+// update_user_profile -> final answer, i.e. 4 rounds before any synthesis.
+// 4 was cutting that off one round too early. Now that Finnhub/Twelve Data
+// respond in ~1s instead of the old scraped sources' multi-second/failing
+// calls, the extra round costs little latency. Still bounded, not
+// unlimited, since the model doesn't always honor "don't retry on failure".
+const MAX_TOOL_ITERATIONS = 5;
 
 async function loadHistory(telegramId: number): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam[]> {
   const recent = await Message.find({ telegramId }).sort({ createdAt: -1 }).limit(HISTORY_LIMIT).lean();
