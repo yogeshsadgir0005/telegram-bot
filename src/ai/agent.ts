@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import { chatCompletion, LLM_MODEL } from "./llm";
+import { chatCompletion } from "./llm";
 import { buildSystemPrompt } from "./prompts/systemPrompt";
 import { toOpenAiToolSchemas, findTool } from "./tools";
 import { User, IUser } from "../db/models/User";
@@ -40,7 +40,6 @@ export async function runAgent(telegramId: number, userMessage: string, user: IU
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const completion = await chatCompletion({
-      model: LLM_MODEL,
       messages,
       tools: tools.length ? tools : undefined,
       tool_choice: tools.length ? "auto" : undefined,

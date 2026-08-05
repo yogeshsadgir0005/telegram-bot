@@ -1,4 +1,4 @@
-import { chatCompletion, LLM_MODEL } from "../ai/llm";
+import { chatCompletion } from "../ai/llm";
 import { IUser } from "../db/models/User";
 import { BriefingLog, BriefingType } from "../db/models/BriefingLog";
 import { fetchFinanceNews, fetchNewsForQuery, fingerprint, NewsItem } from "../finance/news.service";
@@ -113,7 +113,6 @@ export async function generateBriefing(user: IUser, type: BriefingType): Promise
     }
 
     const completion = await chatCompletion({
-      model: LLM_MODEL,
       messages: [{ role: "user", content: curationPrompt(user, type, material, excludeKeys) }],
       temperature: 0.3,
       max_tokens: 600,
