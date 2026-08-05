@@ -17,6 +17,13 @@ export interface Quote {
   dayLow?: number;
   marketCap?: number;
   delayed?: boolean; // true when served from the end-of-day fallback source
+  // Fundamentals — only available via Yahoo, undefined on the Stooq fallback.
+  trailingPE?: number;
+  forwardPE?: number;
+  fiftyTwoWeekHigh?: number;
+  fiftyTwoWeekLow?: number;
+  dividendYield?: number;
+  epsTrailingTwelveMonths?: number;
 }
 
 async function getQuoteFromYahoo(symbol: string): Promise<Quote | null> {
@@ -34,6 +41,12 @@ async function getQuoteFromYahoo(symbol: string): Promise<Quote | null> {
     dayHigh: q.regularMarketDayHigh,
     dayLow: q.regularMarketDayLow,
     marketCap: q.marketCap,
+    trailingPE: q.trailingPE,
+    forwardPE: q.forwardPE,
+    fiftyTwoWeekHigh: q.fiftyTwoWeekHigh,
+    fiftyTwoWeekLow: q.fiftyTwoWeekLow,
+    dividendYield: q.trailingAnnualDividendYield,
+    epsTrailingTwelveMonths: q.epsTrailingTwelveMonths,
   };
 }
 
@@ -102,6 +115,81 @@ export async function getMarketSnapshot(): Promise<IndexSnapshot[]> {
   const entries = Object.entries(MAJOR_INDICES);
   const quotes = await Promise.all(entries.map(([symbol]) => getQuote(symbol)));
   return entries.map(([, name], i) => ({ name, quote: quotes[i] }));
+}
+
+export interface PricePoint {
+  date: string; // YYYY-MM-DD
+  close: number;
+}
+
+// Same Stooq endpoint the quote fallback uses, but keeping the full history
+// instead of just the last two rows — this is the data source for trend
+// analysis (stock analysis is the product's primary focus, not just a spot
+// price lookup).
+export async function getPriceHistory(symbol: string, days = 90): Promise<PricePoint[] | null> {
+  try {
+    const stooqSymbol = symbol.includes(".") ? symbol.toLowerCase() : `${symbol.toLowerCase()}.us`;
+    const res = await axios.get("https://stooq.com/q/d/l/", {
+      params: { s: stooqSymbol, i: "d" },
+      timeout: 8000,
+    });
+    const lines: string[] = String(res.data).trim().split("\n");
+    if (lines.length < 3 || !lines[0].startsWith("Date")) return null;
+
+    const points: PricePoint[] = lines
+      .slice(1)
+      .map((line) => {
+        const [date, , , , close] = line.split(",");
+        return { date, close: Number(close) };
+      })
+      .filter((p) => p.date && Number.isFinite(p.close));
+
+    return points.slice(-days);
+  } catch (err) {
+    logger.warn("getPriceHistory failed", { symbol, err: String(err) });
+    return null;
+  }
+}
+
+export interface StockTrend {
+  symbol: string;
+  periodDays: number;
+  startDate: string;
+  startPrice: number;
+  endDate: string;
+  endPrice: number;
+  percentChange: number;
+  periodHigh: number;
+  periodLow: number;
+  direction: "up" | "down" | "flat";
+}
+
+export async function getStockTrend(symbol: string, days = 90): Promise<StockTrend | null> {
+  const history = await getPriceHistory(symbol, days);
+  if (!history || history.length < 2) return null;
+
+  const start = history[0];
+  const end = history[history.length - 1];
+  const percentChange = ((end.close - start.close) / start.close) * 100;
+  const closes = history.map((p) => p.close);
+
+  return {
+    symbol: symbol.toUpperCase(),
+    periodDays: history.length,
+    startDate: start.date,
+    startPrice: start.close,
+    endDate: end.date,
+    endPrice: end.close,
+    percentChange,
+    periodHigh: Math.max(...closes),
+    periodLow: Math.min(...closes),
+    direction: percentChange > 0.5 ? "up" : percentChange < -0.5 ? "down" : "flat",
+  };
+}
+
+export async function compareStockTrends(symbols: string[], days = 90): Promise<StockTrend[]> {
+  const results = await Promise.all(symbols.map((s) => getStockTrend(s, days)));
+  return results.filter((r): r is StockTrend => r !== null);
 }
 
 export async function searchSymbol(query: string): Promise<{ symbol: string; name: string }[]> {
