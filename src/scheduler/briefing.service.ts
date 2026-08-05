@@ -1,4 +1,4 @@
-import { llm, LLM_MODEL } from "../ai/llm";
+import { chatCompletion, LLM_MODEL } from "../ai/llm";
 import { IUser } from "../db/models/User";
 import { BriefingLog, BriefingType } from "../db/models/BriefingLog";
 import { fetchFinanceNews, fetchNewsForQuery, fingerprint, NewsItem } from "../finance/news.service";
@@ -112,7 +112,7 @@ export async function generateBriefing(user: IUser, type: BriefingType): Promise
       return { sent: false, headlineKeys: [] };
     }
 
-    const completion = await llm.chat.completions.create({
+    const completion = await chatCompletion({
       model: LLM_MODEL,
       messages: [{ role: "user", content: curationPrompt(user, type, material, excludeKeys) }],
       temperature: 0.3,
