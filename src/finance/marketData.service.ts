@@ -85,7 +85,10 @@ async function getQuoteFromTwelveData(symbol: string): Promise<Quote | null> {
     timeout: 8000,
   });
   const d = res.data;
-  if (!d || d.status === "error" || typeof d.close !== "string") return null;
+  if (!d || d.status === "error" || typeof d.close !== "string") {
+    if (d?.status === "error") logger.warn("getQuoteFromTwelveData returned error status", { symbol, message: d.message });
+    return null;
+  }
   const price = Number(d.close);
   const previousClose = Number(d.previous_close);
   if (!Number.isFinite(price)) return null;
@@ -256,7 +259,13 @@ async function getPriceHistoryFromTwelveData(symbol: string, days: number): Prom
     timeout: 8000,
   });
   const d = res.data;
-  if (!d || d.status === "error" || !Array.isArray(d.values) || d.values.length < 2) return null;
+  if (!d || d.status === "error" || !Array.isArray(d.values) || d.values.length < 2) {
+    // Twelve Data returns HTTP 200 with status:"error" for quota/plan issues
+    // (not a thrown exception), so this would otherwise fail completely
+    // silently and look identical to "provider not even tried".
+    if (d?.status === "error") logger.warn("getPriceHistoryFromTwelveData returned error status", { symbol, message: d.message });
+    return null;
+  }
 
   const points: PricePoint[] = d.values
     .map((v: { datetime: string; close: string }) => ({ date: v.datetime, close: Number(v.close) }))
