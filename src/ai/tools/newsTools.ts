@@ -1,5 +1,6 @@
 import { registerTool } from "./registry";
 import { fetchFinanceNews, fetchNewsForQuery } from "../../finance/news.service";
+import { toNumber } from "./coerce";
 
 registerTool({
   name: "get_finance_news",
@@ -8,10 +9,10 @@ registerTool({
   parameters: {
     type: "object",
     properties: {
-      limit: { type: "number", description: "Max number of headlines to return, default 15." },
+      limit: { type: ["number", "string"], description: "Max number of headlines to return, default 15." },
     },
   },
-  execute: async ({ limit }: { limit?: number }) => fetchFinanceNews(limit ?? 15),
+  execute: async ({ limit }: { limit?: number | string }) => fetchFinanceNews(toNumber(limit) ?? 15),
 });
 
 registerTool({

@@ -18,6 +18,12 @@ export const env = {
   nvidiaBaseUrl: required("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
   nvidiaModel: required("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct"),
 
+  // Optional low-latency provider (Groq, OpenAI-compatible). Takes priority
+  // over NVIDIA when set — see ai/llm.ts.
+  groqApiKey: process.env.GROQ_API_KEY ?? "",
+  groqBaseUrl: required("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
+  groqModel: required("GROQ_MODEL", "openai/gpt-oss-120b"),
+
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:3000/integrations/google/callback",

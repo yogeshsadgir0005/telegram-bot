@@ -1,6 +1,7 @@
 import { registerTool } from "./registry";
 import { listUpcomingEvents } from "../../integrations/google/calendar.service";
 import { proposeAction } from "../pendingAction.service";
+import { toNumber } from "./coerce";
 
 registerTool({
   name: "get_upcoming_events",
@@ -8,11 +9,11 @@ registerTool({
   parameters: {
     type: "object",
     properties: {
-      maxResults: { type: "number", description: "Max events to return, default 10." },
+      maxResults: { type: ["number", "string"], description: "Max events to return, default 10." },
     },
   },
-  execute: async ({ maxResults }: { maxResults?: number }, ctx) => {
-    const events = await listUpcomingEvents(ctx.telegramId, maxResults ?? 10);
+  execute: async ({ maxResults }: { maxResults?: number | string }, ctx) => {
+    const events = await listUpcomingEvents(ctx.telegramId, toNumber(maxResults) ?? 10);
     if (events === null) return { error: "not_connected" };
     return { events };
   },

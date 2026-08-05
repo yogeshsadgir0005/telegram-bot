@@ -53,7 +53,10 @@ export async function runAgent(telegramId: number, userMessage: string, user: IU
       const tool = findTool(call.function.name);
       let result: unknown;
       try {
-        const args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+        const parsed = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+        // Some models emit a bare "null" (which JSON.parse resolves to the
+        // primitive null, not {}) when a tool takes no meaningful args.
+        const args = parsed && typeof parsed === "object" ? parsed : {};
         result = tool ? await tool.execute(args, { telegramId }) : { error: `Unknown tool: ${call.function.name}` };
         recordToolUsage(telegramId, call.function.name, args).catch(() => {});
       } catch (err) {

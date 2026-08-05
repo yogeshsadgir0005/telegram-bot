@@ -1,6 +1,7 @@
 import { registerTool } from "./registry";
 import { getRecentInboxItems } from "../../integrations/google/gmail.service";
 import { proposeAction } from "../pendingAction.service";
+import { toNumber } from "./coerce";
 
 registerTool({
   name: "get_inbox_summary",
@@ -9,11 +10,11 @@ registerTool({
   parameters: {
     type: "object",
     properties: {
-      maxResults: { type: "number", description: "Max number of recent emails to fetch, default 20." },
+      maxResults: { type: ["number", "string"], description: "Max number of recent emails to fetch, default 20." },
     },
   },
-  execute: async ({ maxResults }: { maxResults?: number }, ctx) => {
-    const items = await getRecentInboxItems(ctx.telegramId, maxResults ?? 20);
+  execute: async ({ maxResults }: { maxResults?: number | string }, ctx) => {
+    const items = await getRecentInboxItems(ctx.telegramId, toNumber(maxResults) ?? 20);
     if (items === null) return { error: "not_connected" };
     return { items };
   },
