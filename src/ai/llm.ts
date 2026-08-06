@@ -35,6 +35,25 @@ function isDailyQuotaError(err: unknown): boolean {
   return /tokens per day/i.test(message);
 }
 
+function isTransient(err: any): boolean {
+  return err?.status === 429 || err?.status === 503;
+}
+
+async function callNvidiaWithRetry(params: ChatParams) {
+  if (!nvidiaClient) throw new Error("NVIDIA client not configured");
+  try {
+    return await nvidiaClient.chat.completions.create({ ...params, model: env.nvidiaModel });
+  } catch (err: any) {
+    // NVIDIA doesn't give a "retry after Xs" hint like Groq does — this is
+    // specifically for its own transient capacity errors (e.g. "Worker
+    // local total request limit reached"), not a long quota wait.
+    if (!isTransient(err)) throw err;
+    logger.warn("NVIDIA request failed transiently, retrying once", { err: String(err) });
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    return await nvidiaClient.chat.completions.create({ ...params, model: env.nvidiaModel });
+  }
+}
+
 export async function chatCompletion(params: ChatParams) {
   if (groqClient) {
     try {
@@ -58,16 +77,12 @@ export async function chatCompletion(params: ChatParams) {
         logger.warn("Groq request failed, falling back to NVIDIA", { err: String(err), dailyQuotaExhausted: isRateLimit });
       }
 
-      if (nvidiaClient) {
-        return await nvidiaClient.chat.completions.create({ ...params, model: env.nvidiaModel });
-      }
+      if (nvidiaClient) return await callNvidiaWithRetry(params);
       throw err;
     }
   }
 
-  if (nvidiaClient) {
-    return await nvidiaClient.chat.completions.create({ ...params, model: env.nvidiaModel });
-  }
+  if (nvidiaClient) return await callNvidiaWithRetry(params);
 
   throw new Error("No AI provider configured — set GROQ_API_KEY or NVIDIA_API_KEY.");
 }

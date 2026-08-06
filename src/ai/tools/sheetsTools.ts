@@ -1,32 +1,52 @@
 import { registerTool } from "./registry";
-import { listConnectedSheets, readSheetData } from "../../integrations/google/sheets.service";
 import { proposeAction } from "../pendingAction.service";
+import { listDataSources, readDataSource } from "../../documents/dataSource.service";
+import { computeColumnAggregate, AggregateOp } from "../../documents/aggregate";
 
 registerTool({
   name: "list_connected_sheets",
-  description: "List the user's connected Google Sheets (to find a sheetId).",
+  description: "List the user's data sources: connected Google Sheets AND spreadsheet files they've uploaded directly. Use to find an id before reading/analyzing.",
   parameters: { type: "object", properties: {} },
-  execute: async (_args, ctx) => listConnectedSheets(ctx.telegramId),
+  execute: async (_args, ctx) => listDataSources(ctx.telegramId),
 });
 
 registerTool({
   name: "read_sheet_data",
-  description: "Read row/column data from a connected sheet to answer questions or spot trends. Call list_connected_sheets first if sheetId unknown.",
+  description: "Read row/column data from a connected sheet or uploaded file to answer questions or spot trends. Call list_connected_sheets first if the id is unknown.",
   parameters: {
     type: "object",
     properties: {
-      sheetId: { type: "string" },
-      range: { type: "string", description: "A1 notation, e.g. 'A1:F100'. Defaults to broad range." },
+      sheetId: { type: "string", description: "id from list_connected_sheets (works for both Google Sheets and uploaded files)." },
+      range: { type: "string", description: "A1 notation, e.g. 'A1:F100'. Google Sheets only; ignored for uploaded files. Defaults to broad range." },
     },
     required: ["sheetId"],
   },
-  execute: async ({ sheetId, range }: { sheetId: string; range?: string }, ctx) =>
-    readSheetData(ctx.telegramId, sheetId, range),
+  execute: async ({ sheetId, range }: { sheetId: string; range?: string }, ctx) => readDataSource(ctx.telegramId, sheetId, range),
+});
+
+registerTool({
+  name: "compute_column_aggregate",
+  description:
+    "Compute a real sum/average/count/min/max over a column in a connected sheet or uploaded file — use this instead of eyeballing numbers yourself for any 'total of X' / 'average Y' / 'how many rows' style question.",
+  parameters: {
+    type: "object",
+    properties: {
+      sheetId: { type: "string", description: "id from list_connected_sheets." },
+      column: { type: "string", description: "Column header name (e.g. 'Revenue') or letter (e.g. 'C')." },
+      operation: { type: "string", enum: ["sum", "avg", "count", "min", "max"] },
+    },
+    required: ["sheetId", "column", "operation"],
+  },
+  execute: async ({ sheetId, column, operation }: { sheetId: string; column: string; operation: AggregateOp }, ctx) => {
+    const data = await readDataSource(ctx.telegramId, sheetId);
+    if ("error" in data) return data;
+    return computeColumnAggregate(data.values, column, operation);
+  },
 });
 
 registerTool({
   name: "propose_sheet_write",
-  description: "Draft an append/update to a connected sheet for confirmation. Does NOT write.",
+  description: "Draft an append/update to a connected Google Sheet for confirmation. Does NOT write. Only works for Google Sheets, not uploaded files.",
   parameters: {
     type: "object",
     properties: {

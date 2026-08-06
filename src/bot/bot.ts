@@ -5,6 +5,7 @@ import { sendWelcome } from "./handlers/onboarding";
 import { handleChatMessage } from "./handlers/chat";
 import { showSettings } from "./handlers/settings";
 import { handleConnect, handleDisconnect, handleAddSheet, handleListSheets } from "./handlers/integrations";
+import { handleDocumentUpload } from "./handlers/upload";
 import { findTool } from "../ai/tools";
 import { logger } from "../utils/logger";
 
@@ -31,8 +32,8 @@ bot.command("help", async (ctx) => {
       "",
       "/settings — see and change your preferences (just tell me what to change)",
       "/connect — link Gmail, Sheets & Calendar",
-      "/addsheet <link> — connect a spreadsheet",
-      "/sheets — list connected spreadsheets",
+      "/addsheet <link> — connect a Google Sheet, or just send me a .xlsx/.csv file directly",
+      "/sheets — list connected spreadsheets & uploaded files",
       "/disconnect — unlink Google account",
     ].join("\n")
   );
@@ -78,6 +79,8 @@ bot.action("pending:cancel", async (ctx) => {
   await tool.execute({}, { telegramId: ctx.from!.id });
   await ctx.reply("Cancelled.");
 });
+
+bot.on("document", handleDocumentUpload);
 
 bot.on("text", async (ctx) => {
   const user = await getOrCreateUser(ctx.from);

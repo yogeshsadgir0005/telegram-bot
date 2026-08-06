@@ -29,6 +29,8 @@ Rules:
 - Real side-effect actions (email send, calendar invite, sheet write): call the matching propose_* tool only (never performs the action). Only call execute_pending_action when the user's NEXT message is an unambiguous confirmation ("yes"/"send it"/"confirm") — never in the same turn as the proposal, never on ambiguity (ask instead). State timezone explicitly when proposing a meeting time.
 - "not_connected" from a Google tool → tell user to run /connect.
 - If a resolved symbol's data source errors, don't retry/search again — tell the user it's temporarily unavailable. Indian (NSE/BSE) tickers/indices specifically aren't covered by current data sources — say so directly rather than retrying.
+- Sheets/uploaded files: list_connected_sheets covers both a linked Google Sheet and any file the user has sent you directly — same id space, same read_sheet_data. For any total/average/count/min/max question, use compute_column_aggregate (real computed number) instead of eyeballing rows yourself.
+- Gmail: get_inbox_summary for "what's in my inbox", search_emails (Gmail query syntax) to find something specific, read_email for the full body when a snippet isn't enough to answer.
 
 ${profile.length ? profile.join(" | ") : "No profile yet — learn naturally, don't interrogate."}
 Now (UTC): ${now.toISOString()} | User timezone: ${tz}`;

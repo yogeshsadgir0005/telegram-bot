@@ -1,7 +1,8 @@
 import { Context } from "telegraf";
 import { env } from "../../config/env";
 import { getGoogleAuthUrl, isGoogleConnected, hasWriteScopes, disconnectGoogle } from "../../integrations/google/oauth";
-import { connectSheet, listConnectedSheets } from "../../integrations/google/sheets.service";
+import { connectSheet } from "../../integrations/google/sheets.service";
+import { listDataSources } from "../../documents/dataSource.service";
 
 export async function handleConnect(ctx: Context, telegramId: number): Promise<void> {
   if (!env.isGoogleConfigured()) {
@@ -53,10 +54,10 @@ export async function handleAddSheet(ctx: Context, telegramId: number, urlOrId: 
 }
 
 export async function handleListSheets(ctx: Context, telegramId: number): Promise<void> {
-  const sheets = await listConnectedSheets(telegramId);
-  if (!sheets.length) {
-    await ctx.reply("No sheets connected yet. Use /addsheet <link> after /connect.");
+  const sources = await listDataSources(telegramId);
+  if (!sources.length) {
+    await ctx.reply("Nothing connected yet — /addsheet <link> after /connect, or just send me a .xlsx/.csv file directly.");
     return;
   }
-  await ctx.reply(sheets.map((s) => `• ${s.title}`).join("\n"));
+  await ctx.reply(sources.map((s) => `• ${s.name} ${s.type === "uploaded_file" ? "(uploaded)" : "(Google Sheet)"}`).join("\n"));
 }
